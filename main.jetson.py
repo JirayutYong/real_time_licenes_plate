@@ -1,12 +1,14 @@
 import pandas as pd
+import numpy as np
 from tracker import *
 from datetime import datetime
 from ultralytics import YOLO
 import cv2
 import shutil
-from sort.sort import *
+import time
+import os
+from sort import *
 from util import get_car
-import tensorflow as tf
 
 
 input_test = './test_license'
@@ -15,7 +17,7 @@ input_save = './save_car'
 now = datetime.now()
 stamp_day = None
 stamp_time = None
-model = YOLO('yolov8n.pt')
+car_model = YOLO('./models/yolov8n.pt')
 
 
 def clear_file(folder_path):
@@ -45,7 +47,7 @@ def RGB(event, x, y, flags, param):
 
 def process_model(input_files):
     # load models
-    coco_model = YOLO('yolov8n.pt')
+    global car_model
     license_plate_detector = YOLO('./models/license_plate_detector.pt')
     license_plate_recognition = YOLO('./models/province.pt')
 
@@ -87,7 +89,7 @@ def process_model(input_files):
                 if ret:
                     results[frame_nmr] = {}
                     # detect vehicles
-                    detections = coco_model(frame)[0]
+                    detections = car_model(frame)[0]
                     detections_ = []
                     for detection in detections.boxes.data.tolist():
                         x1, y1, x2, y2, score, class_id = detection
@@ -231,60 +233,60 @@ desired_fps = 30
 frame_time_interval = 1 / desired_fps
 skip_frames = 5
 last_count_time = time.time()
-with tf.device('/GPU:0'):
-    while True:
-        clear_file('./test_license')
 
-        start_time = time.time()
-        ret, frame = cap.read()
-        if not ret:
-            break
+while True:
+    clear_file('./test_license')
 
-        frame = cv2.resize(frame, (1200, 750))
-        count += 1
-        if count % skip_frames != 0:
-            continue
+    start_time = time.time()
+    ret, frame = cap.read()
+    if not ret:
+        break
 
-        results = model.predict(frame)
-        a = results[0].boxes.data
-        px = pd.DataFrame(a).astype("float")
-        car_list = []
+    frame = cv2.resize(frame, (1200, 750))
+    count += 1
+    if count % skip_frames != 0:
+        continue
 
-        for index, row in px.iterrows():
-            x1, y1, x2, y2, _, d = map(int, row)
-            c = class_list[d]
-            if 'car' in c:
-                car_list.append([x1, y1, x2, y2])
-        bbox_idx = tracker.update(car_list)
+    results = car_model.predict(frame)
+    a = (results[0].boxes.data).to("cpu").numpy()
+    px = pd.DataFrame(a).astype("float")
+    car_list = []
 
-        for bbox in bbox_idx:
-            x3, y3, x4, y4, id = bbox
-            results = cv2.pointPolygonTest(np.array(area, np.int32), ((x4, y4)), False)
-            # Check if enough time has passed since the last count
-            if time.time() - last_count_time >= 5:
-                cv2.rectangle(frame, (x3, y3), (x4, y4), (0, 255, 0), 2)
-                cv2.circle(frame, (x4, y4), 4, (255, 0, 255), -1)
-                if results >= 0:
-                    imgwrite(frame)
-                    roi_size = 20  # Adjust the size of the ROI as needed
-                    roi = frame[max(0, y3 - roi_size):min(frame.shape[0], y4 + roi_size),
-                          max(0, x3 - roi_size):min(frame.shape[1], x4 + roi_size)]
+    for index, row in px.iterrows():
+        x1, y1, x2, y2, _, d = map(int, row)
+        c = class_list[d]
+        if 'car' in c:
+            car_list.append([x1, y1, x2, y2])
+    bbox_idx = tracker.update(car_list)
 
-                    area_c.add(id)
-                    last_count_time = time.time()
-                    process_model(os.listdir(input_test))  # Update the last count time
-        cv2.polylines(frame, [np.array(area, np.int32)], True, (255, 69, 0), 2)
-        #print(area_c)
-        k = len(area_c)
-        cv2.putText(frame, str(k), (90, 150), cv2.FONT_HERSHEY_PLAIN, 5, (0, 255, 255), 3)
-        cv2.imshow("RGB", frame)
-        elapsed_time = time.time() - start_time
-        sleep_time = max(0, frame_time_interval - elapsed_time)
-        time.sleep(sleep_time)
-        if cv2.waitKey(1) & 0xFF == 27:
-            break
-    cap.release()
-    cv2.destroyAllWindows()
+    for bbox in bbox_idx:
+        x3, y3, x4, y4, id = bbox
+        results = cv2.pointPolygonTest(np.array(area, np.int32), ((x4, y4)), False)
+        # Check if enough time has passed since the last count
+        if time.time() - last_count_time >= 5:
+            cv2.rectangle(frame, (x3, y3), (x4, y4), (0, 255, 0), 2)
+            cv2.circle(frame, (x4, y4), 4, (255, 0, 255), -1)
+            if results >= 0:
+                imgwrite(frame)
+                roi_size = 20  # Adjust the size of the ROI as needed
+                roi = frame[max(0, y3 - roi_size):min(frame.shape[0], y4 + roi_size),
+                        max(0, x3 - roi_size):min(frame.shape[1], x4 + roi_size)]
+
+                area_c.add(id)
+                last_count_time = time.time()
+                process_model(os.listdir(input_test))  # Update the last count time
+    cv2.polylines(frame, [np.array(area, np.int32)], True, (255, 69, 0), 2)
+    #print(area_c)
+    k = len(area_c)
+    cv2.putText(frame, str(k), (90, 150), cv2.FONT_HERSHEY_PLAIN, 5, (0, 255, 255), 3)
+    cv2.imshow("RGB", frame)
+    elapsed_time = time.time() - start_time
+    sleep_time = max(0, frame_time_interval - elapsed_time)
+    time.sleep(sleep_time)
+    if cv2.waitKey(1) & 0xFF == 27:
+        break
+cap.release()
+cv2.destroyAllWindows()
 
 
 

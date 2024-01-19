@@ -14,7 +14,7 @@ input_save = './save_car'
 now = datetime.now()
 stamp_day = None
 stamp_time = None
-model = YOLO('yolov8n.pt')
+car_model = YOLO('./models/yolov8n.pt')
 
 
 def clear_file(folder_path):
@@ -44,7 +44,8 @@ def RGB(event, x, y, flags, param):
 
 def process_model(input_files):
     # load models
-    coco_model = YOLO('yolov8n.pt')
+    global car_model
+    car_model = YOLO('yolov8n.pt')
     license_plate_detector = YOLO('./models/license_plate_detector.pt')
     license_plate_recognition = YOLO('./models/province.pt')
 
@@ -86,7 +87,7 @@ def process_model(input_files):
                 if ret:
                     results[frame_nmr] = {}
                     # detect vehicles
-                    detections = coco_model(frame)[0]
+                    detections = car_model(frame)[0]
                     detections_ = []
                     for detection in detections.boxes.data.tolist():
                         x1, y1, x2, y2, score, class_id = detection
@@ -244,7 +245,7 @@ while True:
     if count % skip_frames != 0:
         continue
 
-    results = model.predict(frame)
+    results = car_model.predict(frame)
     a = results[0].boxes.data
     px = pd.DataFrame(a).astype("float")
     car_list = []
