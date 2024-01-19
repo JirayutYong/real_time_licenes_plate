@@ -215,15 +215,15 @@ def process_model(input_files):
 
                                 # Append the result to the results list
                                 results_list.append(f"รูป {p_file} \n{ch_string} \n{province_string} \n{day} \n{time}\n")
-                                cv2.imshow('Detected Car ROI', roi)
-                                cv2.imshow('crop', license_plate_crop)
+                                # cv2.imshow('Detected Car ROI', roi)
+                                # cv2.imshow('crop', license_plate_crop)
 
 
     for result in results_list:
         print(result)
 
-cv2.namedWindow('RGB')
-cv2.setMouseCallback('RGB', RGB)
+# cv2.namedWindow('RGB')
+# cv2.setMouseCallback('RGB', RGB)
 cap = cv2.VideoCapture('Video_Car.mp4')
 my_file = open("coco.txt", "r")
 data = my_file.read()
@@ -282,7 +282,7 @@ while True:
     #print(area_c)
     k = len(area_c)
     cv2.putText(frame, str(k), (90, 150), cv2.FONT_HERSHEY_PLAIN, 5, (0, 255, 255), 3)
-    cv2.imshow("RGB", frame)
+    # cv2.imshow("RGB", frame)
     elapsed_time = time.time() - start_time
     sleep_time = max(0, frame_time_interval - elapsed_time)
     time.sleep(sleep_time)
