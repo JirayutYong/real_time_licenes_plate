@@ -18,6 +18,7 @@ now = datetime.now()
 stamp_day = None
 stamp_time = None
 car_model = YOLO('./models/yolov8n.pt')
+car_model.to('cuda')
 
 
 def clear_file(folder_path):
@@ -50,6 +51,8 @@ def process_model(input_files):
     global car_model
     license_plate_detector = YOLO('./models/license_plate_detector.pt')
     license_plate_recognition = YOLO('./models/province.pt')
+    license_plate_detector.to('cuda')
+    license_plate_recognition.to('cuda')
 
     # save license plate
     output_folder = './save_license'
@@ -287,24 +290,3 @@ while True:
         break
 cap.release()
 cv2.destroyAllWindows()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
