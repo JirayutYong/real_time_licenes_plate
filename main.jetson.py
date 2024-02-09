@@ -27,8 +27,10 @@ def clear_file(folder_path):
         file_path = os.path.join(folder_path, file_name)
         os.remove(file_path)
 
+
 def clear_folder(folder_path):
     shutil.rmtree(folder_path)
+
 
 def imgwrite(img):
     global stamp_day, stamp_time
@@ -41,10 +43,12 @@ def imgwrite(img):
     cv2.imwrite(os.path.join(input_test, filename), img)
     cv2.imwrite(os.path.join(input_save, filename), img)
 
+
 def RGB(event, x, y, flags, param):
     if event == cv2.EVENT_MOUSEMOVE:
         colorsBGR = [x, y]
-        #print(colorsBGR)
+        # print(colorsBGR)
+
 
 def process_model(input_files):
     # load models
@@ -109,23 +113,29 @@ def process_model(input_files):
                         x1, y1, x2, y2, score, class_id = license_plate
 
                         # assign license plate to car
-                        xcar1, ycar1, xcar2, ycar2, car_id = get_car(license_plate, track_ids)
+                        xcar1, ycar1, xcar2, ycar2, car_id = get_car(
+                            license_plate, track_ids)
 
                         if car_id != -1:
                             # crop license plate
-                            license_plate_crop = frame[int(y1):int(y2), int(x1): int(x2), :]
+                            license_plate_crop = frame[int(
+                                y1):int(y2), int(x1): int(x2), :]
 
                             # Resize the license plate crop to your desired dimensions
                             desired_width = 300  # Desired width of the license plate
                             desired_height = 150  # Desired height of the license plate
-                            license_plate_crop = cv2.resize(license_plate_crop, (desired_width, desired_height))
+                            license_plate_crop = cv2.resize(
+                                license_plate_crop, (desired_width, desired_height))
 
-                            gray_license_plate = cv2.cvtColor(license_plate_crop, cv2.COLOR_BGR2GRAY)
+                            gray_license_plate = cv2.cvtColor(
+                                license_plate_crop, cv2.COLOR_BGR2GRAY)
                             mblur = cv2.medianBlur(gray_license_plate, 5)
                             equalized_license_plate = cv2.equalizeHist(mblur)
 
-                            gaussian_blur = cv2.GaussianBlur(gray_license_plate, (7, 7), 2)
-                            sharp_plate = cv2.addWeighted(gray_license_plate, 1.5, gaussian_blur, -0.5, 0)
+                            gaussian_blur = cv2.GaussianBlur(
+                                gray_license_plate, (7, 7), 2)
+                            sharp_plate = cv2.addWeighted(
+                                gray_license_plate, 1.5, gaussian_blur, -0.5, 0)
 
                             _, binary_license_plate = cv2.threshold(gray_license_plate, 0, 255,
                                                                     cv2.THRESH_BINARY + cv2.THRESH_OTSU)
@@ -136,19 +146,25 @@ def process_model(input_files):
                                                         cv2.THRESH_BINARY, 33, 1)
 
                             if contours:
-                                largest_contour = max(contours, key=cv2.contourArea)
+                                largest_contour = max(
+                                    contours, key=cv2.contourArea)
 
                                 # Approximate the contour to 4 points (assuming it's a rectangle)
-                                epsilon = 0.05 * cv2.arcLength(largest_contour, True)
-                                approximated_contour = cv2.approxPolyDP(largest_contour, epsilon, True)
+                                epsilon = 0.05 * \
+                                    cv2.arcLength(largest_contour, True)
+                                approximated_contour = cv2.approxPolyDP(
+                                    largest_contour, epsilon, True)
 
                                 # Draw the approximated contour on a blank image (black background)
-                                contour_image = np.zeros_like(binary_license_plate)
-                                cv2.drawContours(contour_image, [approximated_contour], -1, 255, thickness=cv2.FILLED)
+                                contour_image = np.zeros_like(
+                                    binary_license_plate)
+                                cv2.drawContours(
+                                    contour_image, [approximated_contour], -1, 255, thickness=cv2.FILLED)
 
                                 # Find the orientation angle of the license plate
-                                angle = cv2.minAreaRect(approximated_contour)[-1]
-                                #print(angle)
+                                angle = cv2.minAreaRect(
+                                    approximated_contour)[-1]
+                                # print(angle)
 
                                 # Rotate the binary image to deskew the license plate
                                 if angle < 360:
@@ -161,20 +177,23 @@ def process_model(input_files):
                                         rotated_angle = 0
 
                                     angle = rotated_angle
-                                #print(angle)
+                                # print(angle)
 
                                 rotation_matrix = cv2.getRotationMatrix2D(
-                                    tuple(np.array(binary_license_plate.shape[1::-1]) / 2),
+                                    tuple(
+                                        np.array(binary_license_plate.shape[1::-1]) / 2),
                                     angle, 1)
                                 deskewed_license_plate = cv2.warpAffine(gray_license_plate, rotation_matrix,
                                                                         gray_license_plate.shape[1::-1],
                                                                         flags=cv2.INTER_LINEAR,
                                                                         borderMode=cv2.BORDER_CONSTANT)
 
-                            cv2.imwrite(os.path.join(output_folder, filename), deskewed_license_plate)
+                            cv2.imwrite(os.path.join(output_folder,
+                                        filename), deskewed_license_plate)
 
                             results_list = []
-                            pred_files = [f for f in os.listdir("save_license")]
+                            pred_files = [
+                                f for f in os.listdir("save_license")]
                             for p_file in pred_files:
                                 # Process each image
                                 recognition_output = license_plate_recognition.predict(
@@ -197,7 +216,8 @@ def process_model(input_files):
                                     })
 
                                 # Sort objects by x-coordinate
-                                sorted_objects = sorted(objects, key=lambda x: x["coordinates"][0])
+                                sorted_objects = sorted(
+                                    objects, key=lambda x: x["coordinates"][0])
 
                                 # Generate the result string
                                 ch_string = "ตัวอักษร : "
@@ -205,26 +225,27 @@ def process_model(input_files):
                                 day = f"วันที่ : {stamp_day}"
                                 time = f"ช่วงเวลา : {stamp_time}"
 
-
                                 for obj in sorted_objects:
                                     if len(obj["class_id"]) > 3:
                                         province_string += obj['class_id']
                                     else:
                                         ch_string += obj["class_id"]
 
-
                                 # Append the result to the results list
-                                results_list.append(f"รูป {p_file} \n{ch_string} \n{province_string} \n{day} \n{time}\n")
+                                results_list.append(
+                                    f"รูป {p_file} \n{ch_string} \n{province_string} \n{day} \n{time}\n")
                                 # cv2.imshow('Detected Car ROI', roi)
                                 # cv2.imshow('crop', license_plate_crop)
-
 
     for result in results_list:
         print(result)
 
 # cv2.namedWindow('RGB')
 # cv2.setMouseCallback('RGB', RGB)
-cap = cv2.VideoCapture('Video_Car.mp4')
+rtsp_url = 'rtsp://192.168.1.226:1200/live'
+cap = cv2.VideoCapture(rtsp_url)
+#cap = cv2.VideoCapture('Video_Car.mp4')
+
 my_file = open("coco.txt", "r")
 data = my_file.read()
 class_list = data.split("\n")
@@ -264,7 +285,8 @@ while True:
 
     for bbox in bbox_idx:
         x3, y3, x4, y4, id = bbox
-        results = cv2.pointPolygonTest(np.array(area, np.int32), ((x4, y4)), False)
+        results = cv2.pointPolygonTest(
+            np.array(area, np.int32), ((x4, y4)), False)
         # Check if enough time has passed since the last count
         if time.time() - last_count_time >= 5:
             cv2.rectangle(frame, (x3, y3), (x4, y4), (0, 255, 0), 2)
@@ -273,15 +295,17 @@ while True:
                 imgwrite(frame)
                 roi_size = 20  # Adjust the size of the ROI as needed
                 roi = frame[max(0, y3 - roi_size):min(frame.shape[0], y4 + roi_size),
-                        max(0, x3 - roi_size):min(frame.shape[1], x4 + roi_size)]
+                            max(0, x3 - roi_size):min(frame.shape[1], x4 + roi_size)]
 
                 area_c.add(id)
                 last_count_time = time.time()
-                process_model(os.listdir(input_test))  # Update the last count time
+                # Update the last count time
+                process_model(os.listdir(input_test))
     cv2.polylines(frame, [np.array(area, np.int32)], True, (255, 69, 0), 2)
-    #print(area_c)
+    # print(area_c)
     k = len(area_c)
-    cv2.putText(frame, str(k), (90, 150), cv2.FONT_HERSHEY_PLAIN, 5, (0, 255, 255), 3)
+    cv2.putText(frame, str(k), (90, 150),
+                cv2.FONT_HERSHEY_PLAIN, 5, (0, 255, 255), 3)
     # cv2.imshow("RGB", frame)
     elapsed_time = time.time() - start_time
     sleep_time = max(0, frame_time_interval - elapsed_time)
