@@ -1,1 +1,8 @@
 **/__pycache__/
+
+save_car
+save_json
+save_license_plate
+save_runs
+
+*.mp4

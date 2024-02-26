@@ -7,9 +7,11 @@ import cv2
 import shutil
 import time
 import os
+import torch
 from sort import *
 from util import get_car
 
+torch.cuda.set_device(0)
 
 input_test = './test_license'
 input_save = './save_car'
@@ -17,8 +19,24 @@ input_save = './save_car'
 now = datetime.now()
 stamp_day = None
 stamp_time = None
+
+license_plate_detector = YOLO('./models/license_plate_detector.pt')
+license_plate_recognition = YOLO('./models/province.pt')
 car_model = YOLO('./models/yolov8n.pt')
+
+
+# Check for CUDA device and set it
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+print(f'Using device: {device}')
+
+license_plate_detector.to('cuda')
+license_plate_recognition.to('cuda')
 car_model.to('cuda')
+
+run_model = "./pre_model/run_model.png"
+car_model.predict(run_model)
+license_plate_recognition.predict(run_model)
+license_plate_detector.predict(run_model)
 
 
 def clear_file(folder_path):
@@ -53,10 +71,6 @@ def RGB(event, x, y, flags, param):
 def process_model(input_files):
     # load models
     global car_model
-    license_plate_detector = YOLO('./models/license_plate_detector.pt')
-    license_plate_recognition = YOLO('./models/province.pt')
-    license_plate_detector.to('cuda')
-    license_plate_recognition.to('cuda')
 
     # save license plate
     output_folder = './save_license'
@@ -240,11 +254,12 @@ def process_model(input_files):
     for result in results_list:
         print(result)
 
+
 # cv2.namedWindow('RGB')
 # cv2.setMouseCallback('RGB', RGB)
 rtsp_url = 'rtsp://192.168.1.226:1200/live'
-cap = cv2.VideoCapture(rtsp_url)
-#cap = cv2.VideoCapture('Video_Car.mp4')
+# cap = cv2.VideoCapture(rtsp_url)
+cap = cv2.VideoCapture('Video_Car.mp4')
 
 my_file = open("coco.txt", "r")
 data = my_file.read()
@@ -306,7 +321,7 @@ while True:
     k = len(area_c)
     cv2.putText(frame, str(k), (90, 150),
                 cv2.FONT_HERSHEY_PLAIN, 5, (0, 255, 255), 3)
-    # cv2.imshow("RGB", frame)
+    cv2.imshow("RGB", frame)
     elapsed_time = time.time() - start_time
     sleep_time = max(0, frame_time_interval - elapsed_time)
     time.sleep(sleep_time)
