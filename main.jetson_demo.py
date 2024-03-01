@@ -10,7 +10,7 @@ from util import get_car
 import json
 
 from utils.VideoCapture import VideoCapture
-from utils.FPS import FPS, FPS_KEY
+from utils.FPS import (FPS, FPS_KEY)
 
 
 # Set Path file
@@ -398,8 +398,8 @@ rtsp_url = "rtsp://192.168.1.209:1200/live"
 # cap = cv2.VideoCapture(rtsp_url)
 # cap = cv2.VideoCapture('Demo_Video_Jettrack_25fps_real.mp4')
 
-videoCapture = VideoCapture(source="Video_Car.mp4", sizes=(1024, 576))
-fps = FPS(1)
+videoCapture = VideoCapture(source="rtsp://localhost:554/live", sizes=(1024, 576))
+fps = FPS(60)
 
 my_file = open("coco.txt", "r")
 data = my_file.read()
@@ -411,54 +411,53 @@ area_c = set()
 
 videoCapture.start()
 
-
 def runner():
-    video = cv2.VideoCapture("Video_Car.mp4")
-    (grabbed, frame) = video.read()
     frame = videoCapture.read()
-    # print(frame)
-    cv2.imshow("Video", frame)
 
-    # results = car_model.predict(frame)
-    # car_list = []
-    # for result in results:
-    #     boxes = result.boxes.data
-    #     for box in boxes:
-    #         x1, y1, x2, y2, _, d = map(int, box)
-    #         c = class_list[d]
-    #         if "car" in c or "truck" in c:
-    #             car_list.append([x1, y1, x2, y2])
+    key = cv2.waitKey(1) & 0xFF
+    if key == ord('q') or videoCapture.is_stop():
+        videoCapture.stop()
+        return FPS_KEY.STOP
 
-    # bbox_idx = tracker.update(car_list)
-    # for bbox in bbox_idx:
-    #     x3, y3, x4, y4, id = bbox
-    #     results = cv2.pointPolygonTest(np.array(area, np.int32), ((x4, y4)), False)
-    # Check if enough time has passed since the last count
-    # if time.time() - last_count_time >= 3.5:
-    #     cv2.rectangle(frame, (x3, y3), (x4, y4), (0, 255, 0), 2)
-    #     cv2.circle(frame, (x4, y4), 4, (255, 0, 255), -1)
-    #     if results >= 0:
-    #         Path_car = imgwrite(frame)
-    #         roi_size = 20  # Adjust the size of the ROI as needed
-    #         roi = frame[
-    #             max(0, y3 - roi_size) : min(frame.shape[0], y4 + roi_size),
-    #             max(0, x3 - roi_size) : min(frame.shape[1], x4 + roi_size),
-    #         ]
+    results = car_model.predict(frame)
+    car_list = []
+    for result in results:
+        boxes = result.boxes.data
+        for box in boxes:
+            x1, y1, x2, y2, _, d = map(int, box)
+            c = class_list[d]
+            if "car" in c or "truck" in c:
+                car_list.append([x1, y1, x2, y2])
 
-    #         area_c.add(id)
-    #         # Update the last count time
-    #         last_count_time = time.time()
-    #         process_model(os.listdir(input_test))
-    #         clear_file("./capture_car_to_pred")
+    bbox_idx = tracker.update(car_list)
+    for bbox in bbox_idx:
+        x3, y3, x4, y4, id = bbox
+        results = cv2.pointPolygonTest(np.array(area, np.int32), ((x4, y4)), False)
+        # Check if enough time has passed since the last count
+        # if time.time() - last_count_time >= 3.5:
+        cv2.rectangle(frame, (x3, y3), (x4, y4), (0, 255, 0), 2)
+        cv2.circle(frame, (x4, y4), 4, (255, 0, 255), -1)
+        if results >= 0:
+            Path_car = imgwrite(frame)
+            roi_size = 20  # Adjust the size of the ROI as needed
+            roi = frame[
+                max(0, y3 - roi_size) : min(frame.shape[0], y4 + roi_size),
+                max(0, x3 - roi_size) : min(frame.shape[1], x4 + roi_size),
+            ]
 
-    # cv2.polylines(frame, [np.array(area, np.int32)], True, (255, 69, 0), 2)
+            area_c.add(id)
+            # Update the last count time
+            last_count_time = time.time()
+            # process_model(os.listdir(input_test))
+            # clear_file("./capture_car_to_pred")
+
+    cv2.polylines(frame, [np.array(area, np.int32)], True, (255, 69, 0), 2)
     # print(area_c)
-    # k = len(area_c)
-    # cv2.putText(frame, str(k), (90, 150), cv2.FONT_HERSHEY_PLAIN, 5, (0, 255, 255), 3)
+    k = len(area_c)
+    cv2.putText(frame, str(k), (90, 150), cv2.FONT_HERSHEY_PLAIN, 5, (0, 255, 255), 3)
     cv2.imshow("Video", frame)
-
     return FPS_KEY.CONTINUE
 
 
-fps.run_with_block_fps(runner)
-cv2.destroyAllWindows()
+fps.run_with_non_block_fps(runner)
+

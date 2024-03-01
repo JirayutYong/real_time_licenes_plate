@@ -15,7 +15,7 @@ class FPS:
         self.subscriber: List[Tuple[int, any]] = []
         pass
 
-    def run_with_non_block_fps(self, runner: Callable[[], FPS_KEY]):
+    def run_with_non_block_fps(self, runner: Callable[[], FPS_KEY], clean_up = None ):
         delta = 0
         stamp = time.time()
 
@@ -24,6 +24,7 @@ class FPS:
         while True:
             if delta > time_per_frame:
                 if runner() == FPS_KEY.STOP:
+                    clean_up and clean_up()
                     break
                 self.frame_count += 1
                 print(self.frame_count)

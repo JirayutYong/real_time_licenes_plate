@@ -5,6 +5,10 @@ save_json
 save_license_plate
 save_runs
 
+capture_car_to_pred/*
+capture_car_to_pred/*
+runs/detect/predict/*
+
 *.mp4
 
 # Byte-compiled / optimized / DLL files

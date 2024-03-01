@@ -6,7 +6,7 @@ from typing import Tuple
 
 
 class VideoCapture:
-    def __init__(self, sizes: Tuple[int, int], source: any = 0) -> None:
+    def __init__(self, sizes: Tuple[int, int] = None, source: any = 0) -> None:
         self.video = cv2.VideoCapture(source)
         (self.grabbed, self.frame) = self.video.read()
 
@@ -19,15 +19,14 @@ class VideoCapture:
     def update(self) -> None:
         while True:
             if self.stopped:
-                return
+                break
             (self.grabbed, frame) = self.video.read()
-
             if not self.grabbed:
-                print("stopped")
                 self.stop()
-                return
+                break
 
-            self.frame = cv2.resize(frame, self.sizes)
+            if self.sizes:
+                self.frame = cv2.resize(frame, self.sizes)
 
     def read(self) -> MatLike:
         return self.frame
@@ -35,3 +34,6 @@ class VideoCapture:
     def stop(self) -> None:
         self.stopped = True
         self.video.release()
+
+    def is_stop(self):
+        return self.stopped
