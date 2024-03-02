@@ -1,5 +1,7 @@
 **/__pycache__/
 
+*.png
+
 save_car
 save_json
 save_license_plate

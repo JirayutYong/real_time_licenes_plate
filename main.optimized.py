@@ -2,11 +2,15 @@ from tracker import *
 from datetime import datetime
 from ultralytics import YOLO
 from ultralytics import RTDETR
+from cv2.typing import MatLike
 import cv2
 import shutil
 from sort.sort import *
 from util import get_car
+from utils.KafkaProducer import Producer
+
 import json
+import base64
 
 car_model = YOLO('yolov8n.pt')
 license_plate_detector = YOLO('./models/license_plate_detector.pt')
@@ -31,6 +35,7 @@ license_plate_recognition.predict(run_model)
 license_plate_detector.predict(run_model)
 car_brand_detector.predict(run_model)
 
+kafka_producer = Producer()
 
 #class_name
 class_names = {
@@ -109,7 +114,7 @@ def process_model(input_files):
             image = cv2.imread(file_path)
 
             # load video / images
-            cap_model = cv2.VideoCapture(file_path)
+            frame = cv2.imread(file_path)
             results = {}
             mot_tracker = Sort()
             vehicles = [2, 3, 5, 7]
@@ -120,186 +125,180 @@ def process_model(input_files):
                                default=-1) + 1
             # frame_number = 0
             # read frames
-            frame_nmr = -1
-            ret = True
-            while ret:
-                frame_nmr += 1
-                ret, frame = cap_model.read()
-                if ret:
-                    results[frame_nmr] = {}
-                    # detect vehicles
-                    detections = car_model(frame)[0]
-                    detections_ = []
-                    for detection in detections.boxes.data.tolist():
-                        x1, y1, x2, y2, score, class_id = detection
-                        if int(class_id) in vehicles:
-                            detections_.append([x1, y1, x2, y2, score])
-                    # track vehicles
-                    track_ids = mot_tracker.update(np.asarray(detections_))
+            frame_nmr = 0
+            results[frame_nmr] = {}
+            # detect vehicles
+            detections = car_model(frame)[0]
+            detections_ = []
+            for detection in detections.boxes.data.tolist():
+                x1, y1, x2, y2, score, class_id = detection
+                if int(class_id) in vehicles:
+                    detections_.append([x1, y1, x2, y2, score])
+            # track vehicles
+            track_ids = mot_tracker.update(np.asarray(detections_))
 
-                    # detect brand car
-                    car_brand = car_brand_detector(frame)[0]
-                    brn = ""
-                    brn_score = ""
-                    if len(car_brand.boxes) > 0:
-                        for brand in car_brand.boxes.data.tolist():
-                            xb1, yb1, xb2, yb2, b_score, b_class_id = brand
-                            if b_score > 0.7:
-                                class_name = class_names.get(b_class_id)
-                                #print("รุ่นของรถ :", class_name, "\nconf :", b_score)
-                                brn = class_name
-                                brn_score = b_score
-                            elif brn == "":
-                                brn = "Unknow"
+            # detect brand car
+            car_brand = car_brand_detector(frame)[0]
+            brn = ""
+            brn_score = ""
+            if len(car_brand.boxes) > 0:
+                for brand in car_brand.boxes.data.tolist():
+                    xb1, yb1, xb2, yb2, b_score, b_class_id = brand
+                    if b_score > 0.7:
+                        class_name = class_names.get(b_class_id)
+                        #print("รุ่นของรถ :", class_name, "\nconf :", b_score)
+                        brn = class_name
+                        brn_score = b_score
+                    elif brn == "":
+                        brn = "Unknow"
 
-                    # detect license plates
-                    license_plates = license_plate_detector(frame)[0]
-                    for license_plate in license_plates.boxes.data.tolist():
-                        x1, y1, x2, y2, score, class_id = license_plate
+            # detect license plates
+            license_plates = license_plate_detector(frame)[0]
+            for license_plate in license_plates.boxes.data.tolist():
+                x1, y1, x2, y2, score, class_id = license_plate
 
-                        # assign license plate to car
-                        xcar1, ycar1, xcar2, ycar2, car_id = get_car(license_plate, track_ids)
+                # assign license plate to car
+                xcar1, ycar1, xcar2, ycar2, car_id = get_car(license_plate, track_ids)
 
-                        if car_id != -1:
-                            # crop license plate
-                            license_plate_crop = frame[int(y1):int(y2), int(x1): int(x2), :]
+                if car_id != -1:
+                    # crop license plate
+                    license_plate_crop = frame[int(y1):int(y2), int(x1): int(x2), :]
 
-                            # Resize the license plate crop to your desired dimensions
-                            desired_width = 300  # Desired width of the license plate
-                            desired_height = 150  # Desired height of the license plate
-                            license_plate_crop = cv2.resize(license_plate_crop, (desired_width, desired_height))
+                    # Resize the license plate crop to your desired dimensions
+                    desired_width = 300  # Desired width of the license plate
+                    desired_height = 150  # Desired height of the license plate
+                    license_plate_crop = cv2.resize(license_plate_crop, (desired_width, desired_height))
 
-                            gray_license_plate = cv2.cvtColor(license_plate_crop, cv2.COLOR_BGR2GRAY)
-                            mblur = cv2.medianBlur(gray_license_plate, 5)
-                            equalized_license_plate = cv2.equalizeHist(mblur)
+                    gray_license_plate = cv2.cvtColor(license_plate_crop, cv2.COLOR_BGR2GRAY)
+                    mblur = cv2.medianBlur(gray_license_plate, 5)
+                    equalized_license_plate = cv2.equalizeHist(mblur)
 
-                            gaussian_blur = cv2.GaussianBlur(gray_license_plate, (7, 7), 2)
-                            sharp_plate = cv2.addWeighted(gray_license_plate, 1.5, gaussian_blur, -0.5, 0)
+                    gaussian_blur = cv2.GaussianBlur(gray_license_plate, (7, 7), 2)
+                    sharp_plate = cv2.addWeighted(gray_license_plate, 1.5, gaussian_blur, -0.5, 0)
 
-                            _, binary_license_plate = cv2.threshold(gray_license_plate, 0, 255,
-                                                                    cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-                            contours, _ = cv2.findContours(binary_license_plate, cv2.RETR_EXTERNAL,
-                                                           cv2.CHAIN_APPROX_SIMPLE)
+                    _, binary_license_plate = cv2.threshold(gray_license_plate, 0, 255,
+                                                            cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                    contours, _ = cv2.findContours(binary_license_plate, cv2.RETR_EXTERNAL,
+                                                    cv2.CHAIN_APPROX_SIMPLE)
 
-                            th1 = cv2.adaptiveThreshold(gray_license_plate, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
-                                                        cv2.THRESH_BINARY, 33, 1)
+                    th1 = cv2.adaptiveThreshold(gray_license_plate, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
+                                                cv2.THRESH_BINARY, 33, 1)
 
-                            if contours:
-                                largest_contour = max(contours, key=cv2.contourArea)
+                    if contours:
+                        largest_contour = max(contours, key=cv2.contourArea)
 
-                                # Approximate the contour to 4 points (assuming it's a rectangle)
-                                epsilon = 0.05 * cv2.arcLength(largest_contour, True)
-                                approximated_contour = cv2.approxPolyDP(largest_contour, epsilon, True)
+                        # Approximate the contour to 4 points (assuming it's a rectangle)
+                        epsilon = 0.05 * cv2.arcLength(largest_contour, True)
+                        approximated_contour = cv2.approxPolyDP(largest_contour, epsilon, True)
 
-                                # Draw the approximated contour on a blank image (black background)
-                                contour_image = np.zeros_like(binary_license_plate)
-                                cv2.drawContours(contour_image, [approximated_contour], -1, 255, thickness=cv2.FILLED)
+                        # Draw the approximated contour on a blank image (black background)
+                        contour_image = np.zeros_like(binary_license_plate)
+                        cv2.drawContours(contour_image, [approximated_contour], -1, 255, thickness=cv2.FILLED)
 
-                                # Find the orientation angle of the license plate
-                                angle = cv2.minAreaRect(approximated_contour)[-1]
-                                #print(angle)
+                        # Find the orientation angle of the license plate
+                        angle = cv2.minAreaRect(approximated_contour)[-1]
+                        #print(angle)
 
-                                # Rotate the binary image to deskew the license plate
-                                if angle < 360:
-                                    if angle > 100 or angle < -100:
-                                        angle = 86
-                                    rotated_angle = angle - 90
-                                    if rotated_angle < -15:
-                                        rotated_angle = 0
+                        # Rotate the binary image to deskew the license plate
+                        if angle < 360:
+                            if angle > 100 or angle < -100:
+                                angle = 86
+                            rotated_angle = angle - 90
+                            if rotated_angle < -15:
+                                rotated_angle = 0
 
-                                    angle = rotated_angle
-                                #print(angle)
+                            angle = rotated_angle
+                        #print(angle)
 
-                                rotation_matrix = cv2.getRotationMatrix2D(
-                                    tuple(np.array(binary_license_plate.shape[1::-1]) / 2),
-                                    angle, 1)
-                                deskewed_license_plate = cv2.warpAffine(gray_license_plate, rotation_matrix,
-                                                                        gray_license_plate.shape[1::-1],
-                                                                        flags=cv2.INTER_LINEAR,
-                                                                        borderMode=cv2.BORDER_CONSTANT)
+                        rotation_matrix = cv2.getRotationMatrix2D(
+                            tuple(np.array(binary_license_plate.shape[1::-1]) / 2),
+                            angle, 1)
+                        deskewed_license_plate = cv2.warpAffine(gray_license_plate, rotation_matrix,
+                                                                gray_license_plate.shape[1::-1],
+                                                                flags=cv2.INTER_LINEAR,
+                                                                borderMode=cv2.BORDER_CONSTANT)
 
-                            cv2.imwrite(os.path.join(output_folder, filename), deskewed_license_plate)
+                    cv2.imwrite(os.path.join(output_folder, filename), deskewed_license_plate)
 
-                            results_list = []
-                            pred_files = [f for f in os.listdir("test_license")]
-                            for p_file in pred_files:
-                                # Process each image
-                                recognition_output = license_plate_recognition.predict(
-                                    source=os.path.join("test_license", p_file), conf=0.7, save=True)
+                    results_list = []
+                    pred_files = [f for f in os.listdir("test_license")]
+                    for p_file in pred_files:
+                        # Process each image
+                        recognition_output = license_plate_recognition.predict(
+                            source=os.path.join("test_license", p_file), conf=0.7, save=True)
 
-                                result = recognition_output[0]
-                                box = result.boxes[0]
-                                objects = []
-                                for box in result.boxes:
-                                    class_id = result.names[box.cls[0].item()]
-                                    cords = box.xyxy[0].tolist()
-                                    cords = [round(x) for x in cords]
-                                    conf = round(box.conf[0].item(), 2)
+                        result = recognition_output[0]
+                        box = result.boxes[0]
+                        objects = []
+                        for box in result.boxes:
+                            class_id = result.names[box.cls[0].item()]
+                            cords = box.xyxy[0].tolist()
+                            cords = [round(x) for x in cords]
+                            conf = round(box.conf[0].item(), 2)
 
-                                    # Store data in a list
-                                    objects.append({
-                                        "class_id": class_id,
-                                        "coordinates": cords,
-                                        "probability": conf
-                                    })
-
-                                # Sort objects by x-coordinate
-                                sorted_objects = sorted(objects, key=lambda x: x["coordinates"][0])
-
-                                # Generate the result string
-                                day = f"วันที่ : {stamp_day}"
-                                time = f"เวลา : {stamp_time}"
-                                license_plate = ""
-                                province = ""
-                                brand_car = f"รุ่นของรถยนต์ : {brn}, conf : {brn_score}"
-
-                                for obj in sorted_objects:
-                                    if len(obj["class_id"]) > 3:
-                                        province += obj['class_id']
-                                    else:
-                                        license_plate += obj["class_id"]
-                                if province == "":
-                                    province = "Unknow"
-
-
-                                # Show and Save License Plate
-                                results_list.append(f"รูป {p_file} \n{day} \n{time} \n{license_plate} \n{province} \n{brand_car}\n")
-                                cv2.imshow('Detected Car ROI', roi)
-                                cv2.imshow('crop', license_plate_crop)
-                                Path_plate = save_license_plate(deskewed_license_plate)
-
-                                # Save Json
-                                try:
-                                    with open(json_file_path, 'r') as json_file:
-                                        existing_data = json.load(json_file)
-                                except FileNotFoundError:
-                                    existing_data = {"license_plate_info": []}
-
-                                # Data to Save
-                                new_data = {
-                                    "date": stamp_day,
-                                    "time": stamp_time,
-                                    "license_plate": license_plate,
-                                    "province": province,
-                                    "brand": brn,
-                                    "img_car_path": Path_car,
-                                    "img_license_path": Path_plate
-                                }
+                            # Store data in a list
+                            objects.append({
+                                "class_id": class_id,
+                                "coordinates": cords,
+                                "probability": conf
+                            })
 
 
 
-                                existing_data["license_plate_info"].append(new_data)
+                        # Sort objects by x-coordinate
+                        sorted_objects = sorted(objects, key=lambda x: x["coordinates"][0])
 
-                                # Save combined data back to JSON file
-                                with open(json_file_path, 'w') as json_file:
-                                    json.dump(existing_data, json_file, ensure_ascii=False, indent=4)
+                        # Generate the result string
+                        day = f"วันที่ : {stamp_day}"
+                        time = f"เวลา : {stamp_time}"
+                        license_plate = ""
+                        province = ""
+                        brand_car = f"รุ่นของรถยนต์ : {brn}, conf : {brn_score}"
+
+                        for obj in sorted_objects:
+                            if len(obj["class_id"]) > 3:
+                                province += obj['class_id']
+                            else:
+                                license_plate += obj["class_id"]
+                        if province == "":
+                            province = "Unknow"
 
 
-                            # Display result
-                            for result in results_list:
-                                print(result)
+                        # Show and Save License Plate
+                        results_list.append(f"รูป {p_file} \n{day} \n{time} \n{license_plate} \n{province} \n{brand_car}\n")
+                        cv2.imshow('Detected Car ROI', roi)
+                        cv2.imshow('crop', license_plate_crop)
+                        Path_plate = save_license_plate(deskewed_license_plate)
 
-                            clear_folder('runs/detect')
+                        # Data to Save
+                        new_data = {
+                            "date_time": f'{stamp_day} {stamp_time}',
+                            "license_plate": license_plate,
+                            "province": province,
+                            "brand": brn,
+                            "img_car_path": Path_car,
+                            "img_license_path": Path_plate
+                        }
+                    message = {
+                        "data": new_data,
+                        "car_image": frame_as_jpeg(frame),
+                        "license_image": frame_as_jpeg(deskewed_license_plate)
+                    }
+                    kafka_producer.get().send("history", value=message)
+
+                    print("result: " , )
+                    
+
+                    # Display result
+                    for result in results_list:
+                        print(result)
+
+                    clear_folder('runs/detect')
+
+
+def frame_as_jpeg(frame: MatLike):
+    img_str = cv2.imencode(".jpg", frame)[1].tobytes()
+    return 'data:image/jpg;base64,'+ base64.b64encode(img_str).decode('utf-8')
 
 cv2.namedWindow('RGB')
 cv2.setMouseCallback('RGB', RGB)
