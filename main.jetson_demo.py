@@ -9,8 +9,11 @@ from sort.sort import *
 from util import get_car
 import json
 
-from utils.VideoCapture import VideoCapture
-from utils.FPS import (FPS, FPS_KEY)
+from utils.videoCapture import VideoCapture
+from utils.fps import (FPS, FPS_KEY)
+from utils.fileWriter import FileWriter
+
+from config import config
 
 
 # Set Path file
@@ -399,7 +402,9 @@ rtsp_url = "rtsp://192.168.1.209:1200/live"
 # cap = cv2.VideoCapture('Demo_Video_Jettrack_25fps_real.mp4')
 
 videoCapture = VideoCapture(source="rtsp://localhost:554/live", sizes=(1024, 576))
-fps = FPS(60)
+fps = FPS(1)
+
+car_file_writer = FileWriter("car")
 
 my_file = open("coco.txt", "r")
 data = my_file.read()
@@ -418,6 +423,12 @@ def runner():
     if key == ord('q') or videoCapture.is_stop():
         videoCapture.stop()
         return FPS_KEY.STOP
+    
+    car_file_writer.write_jpg(prefix="awdaw", image=frame)
+    cv2.imwrite(os.path.join("./capture_car_to_pred2", "car_daw.jpeg"), frame)
+
+    
+
 
     results = car_model.predict(frame)
     car_list = []
@@ -457,7 +468,6 @@ def runner():
     cv2.putText(frame, str(k), (90, 150), cv2.FONT_HERSHEY_PLAIN, 5, (0, 255, 255), 3)
     cv2.imshow("Video", frame)
     return FPS_KEY.CONTINUE
-
 
 fps.run_with_non_block_fps(runner)
 
