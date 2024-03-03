@@ -284,10 +284,7 @@ def process_model(input_files):
                         "car_image": frame_as_jpeg(frame),
                         "license_image": frame_as_jpeg(deskewed_license_plate)
                     }
-                    kafka_producer.get().send("history", value=message)
-
-                    print("result: " , )
-                    
+                    kafka_producer.send_json("history", message)
 
                     # Display result
                     for result in results_list:
@@ -310,7 +307,7 @@ count = 0
 tracker = Tracker()
 area = [(70, 385), (70, 510), (950, 510), (950, 385)]  # เปลี่ยนเป็นเส้นตรง
 area_c = set()
-desired_fps = 30
+desired_fps = 20
 frame_time_interval = 1 / desired_fps
 skip_frames = 1
 last_count_time = time.time()
@@ -371,6 +368,7 @@ while True:
     k = len(area_c)
     #cv2.putText(frame, str(k), (90, 150), cv2.FONT_HERSHEY_PLAIN, 5, (0, 255, 255), 3)
     cv2.imshow("RGB", frame)
+    kafka_producer.send_image_by_frame("frame", frame)
     elapsed_time = time.time() - start_time
     sleep_time = max(0, frame_time_interval - elapsed_time)
     time.sleep(sleep_time)
