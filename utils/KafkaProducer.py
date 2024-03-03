@@ -34,7 +34,7 @@ class Producer(Singleton):
         img_str = cv2.imencode(".jpg", frame)[1].tobytes()
         jpg_as_text = base64.b64encode(img_str)
 
-        this.__producer.send(topic=topic, value=json.dumps("fefsf").encode("utf-8"))
+        this.__producer.send(topic=topic, value=jpg_as_text)
         return
 
     def get(this) -> KafkaProducer:
