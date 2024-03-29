@@ -9,9 +9,9 @@ from sort.sort import *
 from util import get_car
 import json
 
-from utils.videoCapture import VideoCapture
-from utils.fps import (FPS, FPS_KEY)
-from utils.fileWriter import FileWriter
+from utils.VideoCapture import VideoCapture
+from utils.FPS import (FPS, FPS_KEY)
+from utils.FileWriter import FileWriter
 
 from config import config
 
@@ -29,19 +29,19 @@ stamp_time = None
 
 car_model = YOLO("./models/yolov8n.pt")
 license_plate_detector = YOLO("./models/license_plate_detector.pt")
-license_plate_recognition = YOLO("./models/province.pt")
-car_brand_detector = YOLO("./models/brand.pt")
+license_plate_recognition = YOLO("./models/province_1300.pt")
+car_brand_detector = YOLO("./models/car_brand_1000.pt")
 
 # Check for CUDA device and set i./save_license_platet
-# device = 'cuda' if torch.cuda.is_available() else 'cpu'
-# print('Using device: {}'.format(device))
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+print('Using device: {}'.format(device))
 
 
 # # Use CUDA
-# car_model.to('cuda')
-# license_plate_detector.to('cuda')
-# license_plate_recognition.to('cuda')
-# car_brand_detector.to('cuda')
+car_model.to(device)
+license_plate_detector.to(device)
+license_plate_recognition.to(device)
+car_brand_detector.to(device)
 
 # Pre Model
 run_model = "./pre_model/run_model.png"
@@ -397,12 +397,13 @@ def process_model(input_files):
 
 # cv2.namedWindow('RGB')
 # cv2.setMouseCallback('RGB', RGB)
-rtsp_url = "rtsp://192.168.1.209:1200/live"
+# rtsp_url = "rtsp://192.168.1.209:1200/live"
 # cap = cv2.VideoCapture(rtsp_url)
 # cap = cv2.VideoCapture('Demo_Video_Jettrack_25fps_real.mp4')
 
-videoCapture = VideoCapture(source="rtsp://localhost:554/live", sizes=(1024, 576))
-fps = FPS(1)
+# videoCapture = VideoCapture(source="rtsp://192.168.1.209:1200/live", sizes=(1024, 576))
+videoCapture = VideoCapture(source="rtsp://localhost:1200/live", sizes=(1024, 576))
+fps = FPS(10)
 
 car_file_writer = FileWriter("car")
 

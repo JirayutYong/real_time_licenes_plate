@@ -9,6 +9,7 @@ from sort.sort import *
 from util import get_car
 from utils.KafkaProducer import Producer
 
+import torch
 import json
 import base64
 
@@ -16,6 +17,17 @@ car_model = YOLO('yolov8n.pt')
 license_plate_detector = YOLO('./models/license_plate_detector.pt')
 license_plate_recognition = YOLO('./models/province_1300.pt')
 car_brand_detector = YOLO('./models/car_brand_1000.pt')
+
+
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+print('Using device: {}'.format(device))
+
+
+# # Use CUDA
+car_model.to(device)
+license_plate_detector.to(device)
+license_plate_recognition.to(device)
+car_brand_detector.to(device)
 
 
 json_file_path = "./save_json/data.json"
@@ -225,7 +237,7 @@ def process_model(input_files):
                     for p_file in pred_files:
                         # Process each image
                         recognition_output = license_plate_recognition.predict(
-                            source=os.path.join("test_license", p_file), conf=0.7, save=True)
+                            source=os.path.join("test_license", p_file), conf=0.5, save=True)
 
                         result = recognition_output[0]
                         box = result.boxes[0]
@@ -266,8 +278,8 @@ def process_model(input_files):
 
                         # Show and Save License Plate
                         results_list.append(f"รูป {p_file} \n{day} \n{time} \n{license_plate} \n{province} \n{brand_car}\n")
-                        cv2.imshow('Detected Car ROI', roi)
-                        cv2.imshow('crop', license_plate_crop)
+                        # cv2.imshow('Detected Car ROI', roi)
+                        # cv2.imshow('crop', license_plate_crop)
                         Path_plate = save_license_plate(deskewed_license_plate)
 
                         # Data to Save
@@ -297,9 +309,10 @@ def frame_as_jpeg(frame: MatLike):
     img_str = cv2.imencode(".jpg", frame)[1].tobytes()
     return 'data:image/jpg;base64,'+ base64.b64encode(img_str).decode('utf-8')
 
-cv2.namedWindow('RGB')
-cv2.setMouseCallback('RGB', RGB)
+# cv2.namedWindow('RGB')
+# cv2.setMouseCallback('RGB', RGB)
 cap = cv2.VideoCapture('Demo_Video_Jettrack_25fps_real_2min.mp4')
+# cap = cv2.VideoCapture('rtsp://localhost:1200/live')
 my_file = open("coco.txt", "r")
 data = my_file.read()
 class_list = data.split("\n")
@@ -367,7 +380,7 @@ while True:
     #print(area_c)
     k = len(area_c)
     #cv2.putText(frame, str(k), (90, 150), cv2.FONT_HERSHEY_PLAIN, 5, (0, 255, 255), 3)
-    cv2.imshow("RGB", frame)
+    # cv2.imshow("RGB", frame)
     kafka_producer.send_image_by_frame("frame", frame)
     elapsed_time = time.time() - start_time
     sleep_time = max(0, frame_time_interval - elapsed_time)
