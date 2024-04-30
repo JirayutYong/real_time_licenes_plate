@@ -7,21 +7,23 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 import multiprocessing
 
-# minio_endpoint = '192.168.1.111:9080'
-minio_endpoint = '10.20.30.247:9080'
+minio_endpoint = '192.168.1.209:9080'
+# minio_endpoint = '10.20.30.247:9080'
 minio_access_key = 'Jettrack-66'
 minio_secret_key = 'JettrackCEP-66'
 
 class JSONFileHandler(FileSystemEventHandler):
-    def __init__(self, minio_client, bucket_name, object_name) -> None:
+    def __init__(self, minio_client, bucket_name, object_name):
         self.minio_client = minio_client
         self.bucket_name = bucket_name
         self.object_name = object_name
+        self.processed_files = set()
 
     def on_modified(self, event):
-        if event.src_path.endswith('.json'):
-            print(f"Detected modification in JSON file: {event.src_path}")
+        if event.src_path.endswith('.json')and event.src_path not in self.processed_files:
+            print(f"Detected modification in JSON file{event.src_path}")
             self.upload_to_minio(event.src_path)
+            # time.sleep(1)
 
     def upload_to_minio(self, json_file_path):
         with open(json_file_path, 'rb') as file:
@@ -43,12 +45,13 @@ class JSONFileHandler(FileSystemEventHandler):
                 len(json_data),
                 content_type='application/json'
             )
-            print(f"JSON file uploaded to Minio Successfully!! with {self.object_name}")
+            print(f"JSON file uploaded to Minio Successfully!! with #{self.object_name}#")
+            #time.sleep(1)
         except S3Error as e:
-            print(f"Error uploading JSON file to Minio: {e}")
+            print("Error uploading JSON file to Minio: {e}")
 
 class FolderHandler(FileSystemEventHandler):
-    def __init__(self, client, bucket_name, destination_file) -> None:
+    def __init__(self, client, bucket_name, destination_file):
         self.client = client
         self.bucket_name = bucket_name
         self.destination_file = destination_file
@@ -75,9 +78,9 @@ class FolderHandler(FileSystemEventHandler):
         # print("its new file > ", new_file)
         pure_file_name = str(new_file.split('/')[-1])
         # print(pure_file_name)
-        new_object = f"{self.destination_file}/{pure_file_name}"
+        new_object = "{}/{}".format(self.destination_file,pure_file_name)
         self.client.fput_object(bucket_name=self.bucket_name,
-                                object_name=new_object, file_path=new_file)
+                                object_name=new_object, file_path=new_file, content_type='image/jpeg')
         print(new_file, "successfully uploaded as object",
               new_object, "to bucket", self.bucket_name,
               )
@@ -124,6 +127,7 @@ def run_folder_watcher(folder_path):
     # print("Its bucket >", bucket_name)
     # print("its dest >", destination_folder)
 
+    
     folder_handler = FolderHandler(client, bucket_name, destination_folder)
     folder_observer = Observer()
     folder_observer.schedule(folder_handler, folder_path, recursive=False)
